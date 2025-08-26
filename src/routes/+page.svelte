@@ -15,7 +15,7 @@
   let lineHeight = 20;
 
   function initWorker() {
-    worker = new Worker(new URL("../lib/reader.worker.svelte.ts", import.meta.url), {
+    worker = new Worker(new URL("../lib/reader.worker.ts", import.meta.url), {
       type: "module",
     });
 

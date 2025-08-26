@@ -6,8 +6,8 @@ const DEFAULT_ENCODING = "utf-8";
 let file: File | null = null;
 let lineStartList: number[] = [];
 let lineCount = 0;
-let encoding = $state(DEFAULT_ENCODING);
-let newline = $derived(getNewlinePattern(encoding));
+let encoding = DEFAULT_ENCODING;
+let newline = getNewlinePattern(encoding);
 
 self.onmessage = async (event: MessageEvent<ReaderWorkerMessageType.CreateIndex | ReaderWorkerMessageType.Read>) => {
   const message = event.data;
@@ -16,6 +16,7 @@ self.onmessage = async (event: MessageEvent<ReaderWorkerMessageType.CreateIndex 
     case MessageTypeEnum.enum.CreateIndex:
       file = message.file;
       encoding = message.encoding || DEFAULT_ENCODING;
+      newline = getNewlinePattern(encoding);
       lineStartList = [];
       lineCount = 0;
 

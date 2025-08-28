@@ -3,6 +3,7 @@
   import { MessageTypeEnum } from "$lib/schemas/ReaderWorkerMessage";
   import * as ReaderWorkerMessageType from "$lib/types/ReaderWorkerMessage";
   import { clamp, throttle } from "es-toolkit";
+  import { floor, ceil } from "es-toolkit/compat";
   import rafSchd from "raf-schd";
 
   const OVER_SCAN = 100;
@@ -22,20 +23,18 @@
   let lineHeight = $state(20);
 
   let readConfig = $derived.by(() => {
-    const viewport = Math.ceil((viewerClientHeight ?? 0) / lineHeight) || 50;
+    const viewport = ceil((viewerClientHeight ?? 0) / lineHeight) || 50;
     const chunkSize = Math.max(viewport + OVER_SCAN, 300);
-    const stepSize = Math.max(1, Math.floor(chunkSize / 2));
+    const stepSize = Math.max(1, floor(chunkSize / 2));
     return {
       stepSize,
       chunkSize,
     };
   });
-  let block = $derived(Math.floor(lineCurrent / readConfig.stepSize) * readConfig.stepSize);
+  let block = $derived(floor(lineCurrent / readConfig.stepSize) * readConfig.stepSize);
 
   $effect(() => {
-    if (worker) {
-      read(block);
-    }
+    read(block);
   });
 
   function initWorker() {
@@ -51,7 +50,6 @@
       >
     ) => {
       const message = event.data;
-
       switch (message.messageType) {
         // ファイル読込中
         case MessageTypeEnum.enum.CreateIndexStatus:
@@ -89,7 +87,11 @@
   }
 
   function read(startLine: number) {
-    const start = Math.max(0, Math.min(startLine, Math.max(0, lineCount - readConfig.chunkSize)));
+    if (!worker) {
+      return;
+    }
+
+    const start = clamp(startLine, 0, lineCount - readConfig.chunkSize);
     const cacheHit = cache.get(start);
     if (cacheHit) {
       visibleLines = cacheHit;

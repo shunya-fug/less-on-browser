@@ -42,6 +42,11 @@
       type: "module",
     });
 
+    const updateProgressMessage = throttle((done: number, total: number) => {
+      const percent = ((done / total) * 100).toFixed(1);
+      progressText = `ファイル読込中: ${percent}% (${done} / ${total} バイト)`;
+    }, 100);
+
     worker.onmessage = (
       event: MessageEvent<
         | ReaderWorkerMessageType.CreateIndexStatus
@@ -53,14 +58,12 @@
       switch (message.messageType) {
         // ファイル読込中
         case MessageTypeEnum.enum.CreateIndexStatus:
-          throttle(() => {
-            const percent = ((message.doneBytes / message.fileSize) * 100).toFixed(1);
-            progressText = `ファイル読込中: ${percent}% (${message.doneBytes} / ${message.fileSize} バイト)`;
-          }, 100).flush();
+          updateProgressMessage(message.doneBytes, message.fileSize);
           break;
 
         // ファイル読込完了
         case MessageTypeEnum.enum.CreateIndexResult:
+          updateProgressMessage.cancel();
           lineCount = message.lineCount;
           progressText = `読込完了: ${lineCount} 行`;
           read(0);

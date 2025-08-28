@@ -2,17 +2,41 @@
   import { onDestroy, onMount } from "svelte";
   import { MessageTypeEnum } from "$lib/schemas/ReaderWorkerMessage";
   import * as ReaderWorkerMessageType from "$lib/types/ReaderWorkerMessage";
+  import { clamp, throttle } from "es-toolkit";
 
-  const LINES_PER_READ = 200;
+  const OVER_SCAN = 100;
 
   let worker: Worker;
   let file: File | null = $state(null);
   let progressText = $state("ファイル未選択");
   let lineCount = $state(0);
   let lineCurrent = $state(0);
+  let renderStart = $state(0);
   let visibleLines: string[] = $state([]);
+  let cache = new Map<number, string[]>();
+  let inflight = new Set<number>();
+  let pendingBlockStart = -1;
+  let rafId: number | null = null;
   let viewer: HTMLDivElement;
-  let lineHeight = 20;
+  let viewerClientHeight: number | null = $state(null);
+  let lineHeight = $state(20);
+
+  let readConfig = $derived.by(() => {
+    const viewport = Math.ceil((viewerClientHeight ?? 0) / lineHeight) || 50;
+    const chunkSize = Math.max(viewport + OVER_SCAN, 300);
+    const stepSize = Math.max(1, Math.floor(chunkSize / 2));
+    return {
+      stepSize,
+      chunkSize,
+    };
+  });
+  let block = $derived(Math.floor(lineCurrent / readConfig.stepSize) * readConfig.stepSize);
+
+  $effect(() => {
+    if (worker) {
+      read(block);
+    }
+  });
 
   function initWorker() {
     worker = new Worker(new URL("../lib/reader.worker.ts", import.meta.url), {
@@ -31,8 +55,10 @@
       switch (message.messageType) {
         // ファイル読込中
         case MessageTypeEnum.enum.CreateIndexStatus:
-          const percent = ((message.doneBytes / message.fileSize) * 100).toFixed(1);
-          progressText = `ファイル読込中: ${percent}% (${message.doneBytes} / ${message.fileSize} バイト)`;
+          throttle(() => {
+            const percent = ((message.doneBytes / message.fileSize) * 100).toFixed(1);
+            progressText = `ファイル読込中: ${percent}% (${message.doneBytes} / ${message.fileSize} バイト)`;
+          }, 100).flush();
           break;
 
         // ファイル読込完了
@@ -44,8 +70,18 @@
 
         // 読取結果
         case MessageTypeEnum.enum.ReadResult:
-          if (message.lineStart === lineCurrent) {
+          cache.set(message.lineStart, message.lines);
+          inflight.delete(message.lineStart);
+
+          if (message.lineStart === pendingBlockStart) {
             visibleLines = message.lines;
+            renderStart = message.lineStart;
+            pendingBlockStart = -1;
+          }
+
+          const keys = [...cache.keys()].sort((a, b) => Math.abs(a - renderStart) - Math.abs(b - renderStart));
+          for (let i = 3; i < keys.length; i++) {
+            cache.delete(keys[i]);
           }
           break;
       }
@@ -53,11 +89,42 @@
   }
 
   function read(startLine: number) {
-    worker.postMessage({
-      messageType: MessageTypeEnum.enum.Read,
-      lineStart: Math.max(0, startLine),
-      count: LINES_PER_READ,
-    } as ReaderWorkerMessageType.Read);
+    const start = Math.max(0, Math.min(startLine, Math.max(0, lineCount - readConfig.chunkSize)));
+    const cacheHit = cache.get(start);
+    if (cacheHit) {
+      visibleLines = cacheHit;
+      renderStart = start;
+      pendingBlockStart = -1;
+    } else {
+      if (inflight.has(start)) {
+        return;
+      }
+      inflight.add(start);
+      pendingBlockStart = start;
+      worker.postMessage({
+        messageType: MessageTypeEnum.enum.Read,
+        lineStart: Math.max(0, start),
+        count: readConfig.chunkSize,
+      } as ReaderWorkerMessageType.Read);
+    }
+
+    const next = start + readConfig.stepSize;
+    if (next < lineCount && !cache.has(next) && !inflight.has(next)) {
+      worker.postMessage({
+        messageType: MessageTypeEnum.enum.Read,
+        lineStart: next,
+        count: readConfig.chunkSize,
+      } as ReaderWorkerMessageType.Read);
+    }
+
+    const prev = start - readConfig.stepSize;
+    if (prev >= 0 && !cache.has(prev) && !inflight.has(prev)) {
+      worker.postMessage({
+        messageType: MessageTypeEnum.enum.Read,
+        lineStart: prev,
+        count: readConfig.chunkSize,
+      } as ReaderWorkerMessageType.Read);
+    }
   }
 
   function onDropFile(event: DragEvent) {
@@ -80,6 +147,16 @@
       return;
     }
 
+    // 状態リセット
+    cache.clear();
+    inflight.clear();
+    pendingBlockStart = -1;
+    renderStart = 0;
+    lineCurrent = 0;
+    visibleLines = [];
+    viewer?.scrollTo({ top: 0 });
+
+    // インデックス作成
     worker.postMessage({
       messageType: MessageTypeEnum.enum.CreateIndex,
       file,
@@ -92,12 +169,20 @@
   }
 
   function onScrollViewer() {
-    const top = viewer.scrollTop;
-    const newStart = Math.floor(top / lineHeight);
-    if (newStart !== lineCurrent) {
-      lineCurrent = newStart;
-      read(lineCurrent);
+    if (rafId) {
+      cancelAnimationFrame(rafId);
     }
+
+    rafId = requestAnimationFrame(() => {
+      rafId = null;
+      const newStart = clamp(Math.floor(viewer.scrollTop / lineHeight), 0, Math.max(0, lineCount - 1));
+      if (newStart !== lineCurrent) {
+        lineCurrent = newStart;
+        if (block !== pendingBlockStart && block !== renderStart) {
+          read(block);
+        }
+      }
+    });
   }
 
   onMount(() => {
@@ -122,6 +207,7 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       bind:this={viewer}
+      bind:clientHeight={viewerClientHeight}
       class="grow overflow-auto"
       ondrop={onDropFile}
       ondragover={onDragOver}
@@ -130,7 +216,7 @@
       <div class="mx-3 relative" style:height={`${Math.max(1, lineCount) * lineHeight}px`}>
         <div
           class="absolute will-change-transform top-0 inset-x-0"
-          style:transform={`translateY(${lineCurrent * lineHeight}px)`}
+          style:transform={`translateY(${renderStart * lineHeight}px)`}
         >
           {#each visibleLines as line}
             <div

@@ -3,6 +3,7 @@
   import { MessageTypeEnum } from "$lib/schemas/ReaderWorkerMessage";
   import * as ReaderWorkerMessageType from "$lib/types/ReaderWorkerMessage";
   import { clamp, throttle } from "es-toolkit";
+  import rafSchd from "raf-schd";
 
   const OVER_SCAN = 100;
 
@@ -16,7 +17,6 @@
   let cache = new Map<number, string[]>();
   let inflight = new Set<number>();
   let pendingBlockStart = -1;
-  let rafId: number | null = null;
   let viewer: HTMLDivElement;
   let viewerClientHeight: number | null = $state(null);
   let lineHeight = $state(20);
@@ -168,21 +168,20 @@
     event.preventDefault();
   }
 
-  function onScrollViewer() {
-    if (rafId) {
-      cancelAnimationFrame(rafId);
-    }
-
-    rafId = requestAnimationFrame(() => {
-      rafId = null;
-      const newStart = clamp(Math.floor(viewer.scrollTop / lineHeight), 0, Math.max(0, lineCount - 1));
-      if (newStart !== lineCurrent) {
-        lineCurrent = newStart;
-        if (block !== pendingBlockStart && block !== renderStart) {
-          read(block);
-        }
+  const scheduleScroll = rafSchd((top: number) => {
+    const newStart = clamp(floor(top / lineHeight), 0, Math.max(0, lineCount - 1));
+    if (newStart !== lineCurrent) {
+      lineCurrent = newStart;
+      if (block !== pendingBlockStart && block !== renderStart) {
+        read(block);
       }
-    });
+    }
+  });
+
+  function onScrollViewer() {
+    if (viewer) {
+      scheduleScroll(viewer.scrollTop);
+    }
   }
 
   onMount(() => {
@@ -190,6 +189,7 @@
   });
 
   onDestroy(() => {
+    scheduleScroll.cancel();
     worker?.terminate();
   });
 </script>

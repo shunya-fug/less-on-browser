@@ -20,6 +20,7 @@
 		"@types/raf-schd": "^4.0.3",
 		"daisyui": "^5.0.51",
 		"es-toolkit": "^1.39.10",
+		"lucide-svelte": "^0.542.0",
 		"raf-schd": "^4.0.3",
 		"svelte": "^5.0.0",
 		"svelte-check": "^4.0.0",

@@ -1,15 +1,16 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
   import { MessageTypeEnum } from "$lib/schemas/ReaderWorkerMessage";
   import * as ReaderWorkerMessageType from "$lib/types/ReaderWorkerMessage";
   import { clamp, throttle } from "es-toolkit";
-  import { floor, ceil } from "es-toolkit/compat";
+  import { ceil, floor, includes } from "es-toolkit/compat";
   import rafSchd from "raf-schd";
+  import { onDestroy, onMount, untrack } from "svelte";
 
   const OVER_SCAN = 100;
 
   let worker: Worker;
-  let file: File | null = $state(null);
+  let files: FileList | null | undefined = $state();
+  let file: File | null = $derived(files?.[0] ?? null);
   let progressText = $state("ファイル未選択");
   let lineCount = $state(0);
   let lineCurrent = $state(0);
@@ -21,6 +22,7 @@
   let viewer: HTMLDivElement;
   let viewerClientHeight: number | null = $state(null);
   let lineHeight = $state(20);
+  let isDragOver = $state(false);
 
   let readConfig = $derived.by(() => {
     const viewport = ceil((viewerClientHeight ?? 0) / lineHeight) || 50;
@@ -33,14 +35,55 @@
   });
   let block = $derived(floor(lineCurrent / readConfig.stepSize) * readConfig.stepSize);
 
+  const scheduleScroll = rafSchd((top: number) => {
+    const newStart = clamp(floor(top / lineHeight), 0, Math.max(0, lineCount - 1));
+    if (newStart !== lineCurrent) {
+      lineCurrent = newStart;
+      if (block !== pendingBlockStart && block !== renderStart) {
+        read(block);
+      }
+    }
+  });
+
   $effect(() => {
     read(block);
+  });
+
+  $effect(() => {
+    if (!file || !worker) {
+      return;
+    }
+
+    // 状態リセット
+    untrack(() => {
+      cache.clear();
+      inflight.clear();
+      pendingBlockStart = -1;
+      renderStart = 0;
+      lineCurrent = 0;
+      lineCount = 0;
+      visibleLines = [];
+      viewer?.scrollTo({ top: 0 });
+      scheduleScroll.cancel();
+    });
+
+    // インデックス作成
+    worker.postMessage({
+      messageType: MessageTypeEnum.enum.CreateIndex,
+      file,
+      encoding: "utf-16le",
+    } as ReaderWorkerMessageType.CreateIndex);
   });
 
   function initWorker() {
     worker = new Worker(new URL("../lib/reader.worker.ts", import.meta.url), {
       type: "module",
     });
+
+    const updateProgressMessage = throttle((done: number, total: number) => {
+      const percent = ((done / total) * 100).toFixed(1);
+      progressText = `ファイル読込中: ${percent}% (${done} / ${total} バイト)`;
+    }, 100);
 
     worker.onmessage = (
       event: MessageEvent<
@@ -53,14 +96,12 @@
       switch (message.messageType) {
         // ファイル読込中
         case MessageTypeEnum.enum.CreateIndexStatus:
-          throttle(() => {
-            const percent = ((message.doneBytes / message.fileSize) * 100).toFixed(1);
-            progressText = `ファイル読込中: ${percent}% (${message.doneBytes} / ${message.fileSize} バイト)`;
-          }, 100).flush();
+          updateProgressMessage(message.doneBytes, message.fileSize);
           break;
 
         // ファイル読込完了
         case MessageTypeEnum.enum.CreateIndexResult:
+          updateProgressMessage.cancel();
           lineCount = message.lineCount;
           progressText = `読込完了: ${lineCount} 行`;
           read(0);
@@ -91,7 +132,7 @@
       return;
     }
 
-    const start = clamp(startLine, 0, lineCount - readConfig.chunkSize);
+    const start = clamp(startLine, 0, Math.max(0, lineCount - readConfig.chunkSize));
     const cacheHit = cache.get(start);
     if (cacheHit) {
       visibleLines = cacheHit;
@@ -105,7 +146,7 @@
       pendingBlockStart = start;
       worker.postMessage({
         messageType: MessageTypeEnum.enum.Read,
-        lineStart: Math.max(0, start),
+        lineStart: start,
         count: readConfig.chunkSize,
       } as ReaderWorkerMessageType.Read);
     }
@@ -129,56 +170,39 @@
     }
   }
 
+  const hasFiles = (event: DragEvent) => includes(event.dataTransfer?.types ?? [], "Files");
+
   function onDropFile(event: DragEvent) {
-    event.preventDefault();
-
-    if (event.dataTransfer?.items) {
-      [...event.dataTransfer.items].forEach((item) => {
-        if (item.kind !== "file") {
-          return;
-        }
-        file = item.getAsFile();
-      });
-    } else {
-      [...(event.dataTransfer?.files ?? [])].forEach((_file, i) => {
-        file = _file;
-      });
-    }
-
-    if (!file) {
+    if (!hasFiles(event)) {
       return;
     }
-
-    // 状態リセット
-    cache.clear();
-    inflight.clear();
-    pendingBlockStart = -1;
-    renderStart = 0;
-    lineCurrent = 0;
-    visibleLines = [];
-    viewer?.scrollTo({ top: 0 });
-
-    // インデックス作成
-    worker.postMessage({
-      messageType: MessageTypeEnum.enum.CreateIndex,
-      file,
-      encoding: "utf-16le",
-    } as ReaderWorkerMessageType.CreateIndex);
+    event.preventDefault();
+    isDragOver = false;
+    files = event.dataTransfer?.files ?? null;
   }
 
   function onDragOver(event: DragEvent) {
+    if (!hasFiles(event)) {
+      return;
+    }
     event.preventDefault();
   }
 
-  const scheduleScroll = rafSchd((top: number) => {
-    const newStart = clamp(floor(top / lineHeight), 0, Math.max(0, lineCount - 1));
-    if (newStart !== lineCurrent) {
-      lineCurrent = newStart;
-      if (block !== pendingBlockStart && block !== renderStart) {
-        read(block);
-      }
+  function onDragEnter(event: DragEvent) {
+    if (!hasFiles(event)) {
+      return;
     }
-  });
+    event.preventDefault();
+    isDragOver = true;
+  }
+
+  function onDragLeave(event: DragEvent) {
+    if (!hasFiles(event)) {
+      return;
+    }
+    event.preventDefault();
+    isDragOver = false;
+  }
 
   function onScrollViewer() {
     if (viewer) {
@@ -201,35 +225,68 @@
 {/snippet}
 
 <main class="p-3 h-screen">
-  <div class="mockup-browser border-base-300 border w-full h-full flex flex-col">
+  <div class="mockup-browser border-base-300 bg-base-200 border w-full h-full flex flex-col">
     <div class="mockup-browser-toolbar">
       <div class="ml-auto">{file?.name}</div>
     </div>
     {@render border()}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      bind:this={viewer}
-      bind:clientHeight={viewerClientHeight}
-      class="grow overflow-auto"
-      ondrop={onDropFile}
-      ondragover={onDragOver}
-      onscroll={onScrollViewer}
-    >
-      <div class="mx-3 relative" style:height={`${Math.max(1, lineCount) * lineHeight}px`}>
-        <div
-          class="absolute will-change-transform top-0 inset-x-0"
-          style:transform={`translateY(${renderStart * lineHeight}px)`}
-        >
-          {#each visibleLines as line}
-            <div
-              class="overflow-hidden whitespace-pre font-mono"
-              style:height={`${lineHeight}px`}
-              style:lineHeight={`${lineHeight}px`}
-            >
-              {line}
+    <div class="relative grow bg-base-100" ondrop={onDropFile} ondragover={onDragOver} ondragenter={onDragEnter}>
+      <div
+        class={[
+          "sticky inset-0 h-full p-5 z-10 transition-[opacity,visibility] duration-150 ease-in-out",
+          file && !isDragOver ? "opacity-0 invisible" : "opacity-70 visible",
+        ]}
+        ondragleave={onDragLeave}
+      >
+        <div class="relative h-full w-full pointer-events-none">
+          <div
+            class={[
+              "absolute inset-0 h-full w-full flex rounded bg-base-100 border border-dashed transition-opacity duration-150 ease-in-out",
+              isDragOver ? "opacity-100 visible" : "opacity-0 invisible",
+            ]}
+          ></div>
+          <div class="absolute inset-0 flex items-center justify-center flex-col">
+            <div>
+              <div class="text-2xl font-bold">ここにファイルをドロップ</div>
+              {#if !file && !isDragOver}
+                <div class="divider">OR</div>
+                <button
+                  class={["btn btn-wide btn-dash", !isDragOver && "pointer-events-auto"]}
+                  onclick={() => document.getElementById("file-input")?.click()}
+                >
+                  ファイルを選択
+                </button>
+                <input id="file-input" type="file" class="hidden" bind:files />
+              {/if}
             </div>
-          {/each}
+          </div>
         </div>
+      </div>
+      <div
+        class="absolute inset-0 h-full ml-3 overflow-auto"
+        bind:this={viewer}
+        bind:clientHeight={viewerClientHeight}
+        onscroll={onScrollViewer}
+      >
+        {#if file}
+          <div style:height={`${Math.max(1, lineCount) * lineHeight}px`}>
+            <div
+              class="absolute will-change-transform top-0 inset-x-0"
+              style:transform={`translateY(${renderStart * lineHeight}px)`}
+            >
+              {#each visibleLines as line}
+                <div
+                  class="overflow-hidden whitespace-pre font-mono"
+                  style:height={`${lineHeight}px`}
+                  style:lineHeight={`${lineHeight}px`}
+                >
+                  {line}
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
       </div>
     </div>
     {@render border()}

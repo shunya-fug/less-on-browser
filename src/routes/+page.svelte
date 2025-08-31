@@ -24,6 +24,8 @@
   let viewerClientHeight: number | null = $state(null);
   let lineHeight = $state(20);
   let isDragOver = $state(false);
+  // 桁数に応じて行番号の幅を調整（ch 単位）
+  let lineNumberWidthCh = $derived(Math.max(2, String(Math.max(1, lineCount)).length + 1));
 
   let readConfig = $derived.by(() => {
     const viewport = ceil((viewerClientHeight ?? 0) / lineHeight) || 50;
@@ -282,13 +284,17 @@
               class="absolute will-change-transform top-0 inset-x-0"
               style:transform={`translateY(${renderStart * lineHeight}px)`}
             >
-              {#each visibleLines as line}
-                <div
-                  class="overflow-hidden whitespace-pre font-mono"
-                  style:height={`${lineHeight}px`}
-                  style:lineHeight={`${lineHeight}px`}
-                >
-                  {line}
+              {#each visibleLines as line, i}
+                <div class="font-mono flex" style:height={`${lineHeight}px`} style:lineHeight={`${lineHeight}px`}>
+                  <div
+                    class="select-none text-right pr-2 mr-3 border-r border-base-300 text-base-content/60"
+                    style:width={`${lineNumberWidthCh}ch`}
+                  >
+                    {renderStart + i + 1}
+                  </div>
+                  <div class="overflow-hidden whitespace-pre grow">
+                    {line}
+                  </div>
                 </div>
               {/each}
             </div>

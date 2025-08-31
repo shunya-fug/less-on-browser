@@ -3,6 +3,7 @@
   import * as ReaderWorkerMessageType from "$lib/types/ReaderWorkerMessage";
   import { clamp, throttle } from "es-toolkit";
   import { ceil, floor, includes } from "es-toolkit/compat";
+  import { Menu } from "lucide-svelte";
   import rafSchd from "raf-schd";
   import { onDestroy, onMount, untrack } from "svelte";
 
@@ -35,6 +36,10 @@
   });
   let block = $derived(floor(lineCurrent / readConfig.stepSize) * readConfig.stepSize);
 
+  const openFileDialog = () => {
+    document.getElementById("file-input")?.click();
+  };
+
   const scheduleScroll = rafSchd((top: number) => {
     const newStart = clamp(floor(top / lineHeight), 0, Math.max(0, lineCount - 1));
     if (newStart !== lineCurrent) {
@@ -65,6 +70,8 @@
       visibleLines = [];
       viewer?.scrollTo({ top: 0 });
       scheduleScroll.cancel();
+      // ドロップダウンメニューを閉じる
+      (document.activeElement as HTMLElement)?.blur();
     });
 
     // インデックス作成
@@ -249,15 +256,15 @@
           <div class="absolute inset-0 flex items-center justify-center flex-col">
             <div>
               <div class="text-2xl font-bold">ここにファイルをドロップ</div>
+              <input id="file-input" type="file" class="hidden" bind:files />
               {#if !file && !isDragOver}
                 <div class="divider">OR</div>
                 <button
                   class={["btn btn-wide btn-dash", !isDragOver && "pointer-events-auto"]}
-                  onclick={() => document.getElementById("file-input")?.click()}
+                  onclick={openFileDialog}
                 >
                   ファイルを選択
                 </button>
-                <input id="file-input" type="file" class="hidden" bind:files />
               {/if}
             </div>
           </div>
@@ -290,9 +297,20 @@
       </div>
     </div>
     {@render border()}
-    <div class="p-2 flex">
+    <div class="flex items-center gap-3">
       <div class="grow"></div>
       {progressText}
+      <div class="dropdown dropdown-hover dropdown-top dropdown-end">
+        <div tabindex="0" role="button" class="p-1 px-2 hover:cursor-pointer border-l border-l-gray-500">
+          <Menu />
+        </div>
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        <ul tabindex="0" class="dropdown-content menu rounded shadow-sm w-max p-1 px-3 text-lg bg-base-200">
+          <li>
+            <button class="px-5" onclick={openFileDialog}>ファイル選択</button>
+          </li>
+        </ul>
+      </div>
     </div>
   </div>
 </main>

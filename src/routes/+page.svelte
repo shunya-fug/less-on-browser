@@ -1,6 +1,7 @@
 <script lang="ts">
   import { MessageTypeEnum } from "$lib/schemas/ReaderWorkerMessage";
   import * as ReaderWorkerMessageType from "$lib/types/ReaderWorkerMessage";
+  import { SUPPORTED_ENCODINGS, DEFAULT_ENCODING, getEncodingGroups } from "$lib/encodings";
   import { clamp, throttle } from "es-toolkit";
   import { ceil, floor, includes } from "es-toolkit/compat";
   import { Menu } from "lucide-svelte";
@@ -24,6 +25,7 @@
   let viewerClientHeight: number | null = $state(null);
   let lineHeight = $state(20);
   let isDragOver = $state(false);
+  let selectedEncoding = $state(DEFAULT_ENCODING);
   // 桁数に応じて行番号の幅を調整（ch 単位）
   let lineNumberWidthCh = $derived(Math.max(2, String(Math.max(1, lineCount)).length + 1));
 
@@ -56,6 +58,31 @@
     read(block);
   });
 
+  // エンコーディング変更時にファイルを再読込
+  $effect(() => {
+    if (file && worker && selectedEncoding) {
+      // 状態リセット
+      untrack(() => {
+        cache.clear();
+        inflight.clear();
+        pendingBlockStart = -1;
+        renderStart = 0;
+        lineCurrent = 0;
+        lineCount = 0;
+        visibleLines = [];
+        viewer?.scrollTo({ top: 0 });
+        scheduleScroll.cancel();
+      });
+
+      // インデックス再作成
+      worker.postMessage({
+        messageType: MessageTypeEnum.enum.CreateIndex,
+        file,
+        encoding: selectedEncoding,
+      } as ReaderWorkerMessageType.CreateIndex);
+    }
+  });
+
   $effect(() => {
     if (!file || !worker) {
       return;
@@ -75,13 +102,6 @@
       // ドロップダウンメニューを閉じる
       (document.activeElement as HTMLElement)?.blur();
     });
-
-    // インデックス作成
-    worker.postMessage({
-      messageType: MessageTypeEnum.enum.CreateIndex,
-      file,
-      encoding: "utf-16le",
-    } as ReaderWorkerMessageType.CreateIndex);
   });
 
   function initWorker() {
@@ -314,6 +334,26 @@
         <ul tabindex="0" class="dropdown-content menu rounded shadow-sm w-max p-1 px-3 text-lg bg-base-200">
           <li>
             <button class="px-5" onclick={openFileDialog}>ファイル選択</button>
+          </li>
+          <li>
+            <details>
+              <summary class="px-5">エンコーディング: {SUPPORTED_ENCODINGS.find(e => e.value === selectedEncoding)?.label}</summary>
+              <ul class="max-h-60 overflow-y-auto w-64">
+                {#each [...getEncodingGroups().entries()] as [groupName, encodings]}
+                  <li class="menu-title">{groupName}</li>
+                  {#each encodings as encoding}
+                    <li>
+                      <button
+                        class="text-sm justify-start {selectedEncoding === encoding.value ? 'active' : ''}"
+                        onclick={() => selectedEncoding = encoding.value}
+                      >
+                        {encoding.label}
+                      </button>
+                    </li>
+                  {/each}
+                {/each}
+              </ul>
+            </details>
           </li>
         </ul>
       </div>

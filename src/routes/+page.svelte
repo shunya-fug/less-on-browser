@@ -80,7 +80,7 @@
     worker.postMessage({
       messageType: MessageTypeEnum.enum.CreateIndex,
       file,
-      encoding: "utf-16le",
+      encoding: "utf-8",
     } as ReaderWorkerMessageType.CreateIndex);
   });
 

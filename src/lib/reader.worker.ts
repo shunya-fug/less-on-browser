@@ -17,7 +17,7 @@ self.onmessage = async (event: MessageEvent<ReaderWorkerMessageType.CreateIndex 
       file = message.file;
       encoding = message.encoding || DEFAULT_ENCODING;
       newline = getNewlinePattern(encoding);
-      lineStartList = [];
+      lineStartList = [0]; // Start with position 0 for the first line
       lineCount = 0;
 
       const chunkSize = message.chunkSize ?? 1024 * 1024;
@@ -57,7 +57,14 @@ self.onmessage = async (event: MessageEvent<ReaderWorkerMessageType.CreateIndex 
       }
 
       // 処理完了通知
-      lineCount = lineStartList.length;
+      // Calculate line count based on lineStartList
+      if (file.size > 0 && lineStartList[lineStartList.length - 1] < file.size) {
+        // File doesn't end with newline, so the number of lines equals lineStartList.length
+        lineCount = lineStartList.length;
+      } else {
+        // File ends with newline, so the last entry in lineStartList points to an empty line
+        lineCount = lineStartList.length - 1;
+      }
       self.postMessage({
         messageType: MessageTypeEnum.enum.CreateIndexResult,
         lineCount,
@@ -99,8 +106,25 @@ function getNewlinePattern(encoding: string): Uint8Array {
 }
 
 function calculateByteRange(lineStart: number, lineEnd: number) {
-  return {
-    byteStart: lineStartList[Math.max(0, lineStart)],
-    byteEnd: lineEnd < lineStartList.length ? lineStartList[lineEnd] : file!.size,
-  };
+  // lineStart and lineEnd are 0-based line numbers
+  // lineEnd is exclusive (not included in the range)
+  
+  let byteStart: number;
+  let byteEnd: number;
+  
+  // Get byte start position for lineStart
+  if (lineStart >= 0 && lineStart < lineStartList.length) {
+    byteStart = lineStartList[lineStart];
+  } else {
+    byteStart = file!.size;
+  }
+  
+  // Get byte end position for lineEnd (exclusive)
+  if (lineEnd >= 0 && lineEnd < lineStartList.length) {
+    byteEnd = lineStartList[lineEnd];
+  } else {
+    byteEnd = file!.size;
+  }
+  
+  return { byteStart, byteEnd };
 }

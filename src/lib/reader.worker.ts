@@ -57,11 +57,12 @@ self.onmessage = async (event: MessageEvent<ReaderWorkerMessageType.CreateIndex 
       }
 
       // 処理完了通知
-      lineCount = lineStartList.length;
-      // If file doesn't end with newline, there's one more line
+      // Calculate line count based on lineStartList
       if (file.size > 0 && lineStartList[lineStartList.length - 1] < file.size) {
+        // File doesn't end with newline, so the number of lines equals lineStartList.length
         lineCount = lineStartList.length;
       } else {
+        // File ends with newline, so the last entry in lineStartList points to an empty line
         lineCount = lineStartList.length - 1;
       }
       self.postMessage({
@@ -105,10 +106,21 @@ function getNewlinePattern(encoding: string): Uint8Array {
 }
 
 function calculateByteRange(lineStart: number, lineEnd: number) {
-  const byteStart = lineStart < lineStartList.length ? lineStartList[lineStart] : file!.size;
+  // lineStart and lineEnd are 0-based line numbers
+  // lineEnd is exclusive (not included in the range)
+  
+  let byteStart: number;
   let byteEnd: number;
   
-  if (lineEnd < lineStartList.length) {
+  // Get byte start position for lineStart
+  if (lineStart >= 0 && lineStart < lineStartList.length) {
+    byteStart = lineStartList[lineStart];
+  } else {
+    byteStart = file!.size;
+  }
+  
+  // Get byte end position for lineEnd (exclusive)
+  if (lineEnd >= 0 && lineEnd < lineStartList.length) {
     byteEnd = lineStartList[lineEnd];
   } else {
     byteEnd = file!.size;

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { MessageTypeEnum } from "$lib/schemas/ReaderWorkerMessage";
   import * as ReaderWorkerMessageType from "$lib/types/ReaderWorkerMessage";
-  import { SUPPORTED_ENCODINGS, DEFAULT_ENCODING, getEncodingGroups } from "$lib/encodings";
+  import { SUPPORTED_ENCODINGS, DEFAULT_ENCODING, ENCODING_GROUPS } from "$lib/encodings";
   import { clamp, throttle } from "es-toolkit";
   import { ceil, floor, includes } from "es-toolkit/compat";
   import { Menu } from "lucide-svelte";
@@ -26,6 +26,8 @@
   let lineHeight = $state(20);
   let isDragOver = $state(false);
   let selectedEncoding = $state(DEFAULT_ENCODING);
+  // 選択されたエンコーディングのラベルをキャッシュ
+  let currentEncodingLabel = $derived(SUPPORTED_ENCODINGS.find(e => e.value === selectedEncoding)?.label);
   // 桁数に応じて行番号の幅を調整（ch 単位）
   let lineNumberWidthCh = $derived(Math.max(2, String(Math.max(1, lineCount)).length + 1));
 
@@ -337,9 +339,9 @@
           </li>
           <li>
             <details>
-              <summary class="px-5">エンコーディング: {SUPPORTED_ENCODINGS.find(e => e.value === selectedEncoding)?.label}</summary>
+              <summary class="px-5">エンコーディング: {currentEncodingLabel}</summary>
               <ul class="max-h-60 overflow-y-auto w-64">
-                {#each [...getEncodingGroups().entries()] as [groupName, encodings]}
+                {#each [...ENCODING_GROUPS.entries()] as [groupName, encodings]}
                   <li class="menu-title">{groupName}</li>
                   {#each encodings as encoding}
                     <li>

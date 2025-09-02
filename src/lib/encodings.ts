@@ -36,8 +36,8 @@ export const SUPPORTED_ENCODINGS = [
 
 export const DEFAULT_ENCODING = 'utf-8';
 
-// エンコーディンググループを取得
-export const getEncodingGroups = () => {
+// エンコーディンググループをモジュールレベルでキャッシュ
+const createEncodingGroups = () => {
   const groups = new Map<string, typeof SUPPORTED_ENCODINGS[number][]>();
   
   for (const encoding of SUPPORTED_ENCODINGS) {
@@ -48,3 +48,6 @@ export const getEncodingGroups = () => {
   
   return groups;
 };
+
+// キャッシュされたエンコーディンググループ
+export const ENCODING_GROUPS = createEncodingGroups();

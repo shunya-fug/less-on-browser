@@ -2,9 +2,9 @@
   import { MessageTypeEnum } from "$lib/schemas/ReaderWorkerMessage";
   import * as ReaderWorkerMessageType from "$lib/types/ReaderWorkerMessage";
   import { SUPPORTED_ENCODINGS, DEFAULT_ENCODING, ENCODING_GROUPS } from "$lib/encodings";
+  import { detectFileEncoding } from "$lib/encoding-detector";
   import { clamp, throttle } from "es-toolkit";
   import { ceil, floor, includes } from "es-toolkit/compat";
-  import { Menu } from "lucide-svelte";
   import rafSchd from "raf-schd";
   import { onDestroy, onMount, untrack } from "svelte";
 
@@ -26,8 +26,6 @@
   let lineHeight = $state(20);
   let isDragOver = $state(false);
   let selectedEncoding = $state(DEFAULT_ENCODING);
-  // 選択されたエンコーディングのラベルをキャッシュ
-  let currentEncodingLabel = $derived(SUPPORTED_ENCODINGS.find(e => e.value === selectedEncoding)?.label);
   // 桁数に応じて行番号の幅を調整（ch 単位）
   let lineNumberWidthCh = $derived(Math.max(2, String(Math.max(1, lineCount)).length + 1));
 
@@ -90,6 +88,19 @@
       return;
     }
 
+    // ファイルのエンコーディングを自動検出
+    file.slice(0, 8192).arrayBuffer().then(buffer => {
+      const detection = detectFileEncoding(buffer);
+      console.log('自動検出されたエンコーディング:', detection);
+      
+      // 検出されたエンコーディングがサポートされている場合は設定
+      const supportedEncoding = SUPPORTED_ENCODINGS.find(e => e.value === detection.encoding);
+      if (supportedEncoding) {
+        selectedEncoding = detection.encoding;
+        console.log('エンコーディングを設定:', detection.encoding, '(信頼度:', detection.confidence, ', 方法:', detection.method, ')');
+      }
+    });
+
     // 状態リセット
     untrack(() => {
       cache.clear();
@@ -101,7 +112,7 @@
       visibleLines = [];
       viewer?.scrollTo({ top: 0 });
       scheduleScroll.cancel();
-      // ドロップダウンメニューを閉じる
+      // セレクトボックスのフォーカスを外す
       (document.activeElement as HTMLElement)?.blur();
     });
   });
@@ -325,39 +336,29 @@
       </div>
     </div>
     {@render border()}
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-3 p-2">
+      <button class="btn btn-sm btn-outline" onclick={openFileDialog}>
+        ファイル選択
+      </button>
       <div class="grow"></div>
-      {progressText}
-      <div class="dropdown dropdown-hover dropdown-top dropdown-end">
-        <div tabindex="0" role="button" class="p-1 px-2 hover:cursor-pointer border-l border-l-gray-500">
-          <Menu />
-        </div>
-        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-        <ul tabindex="0" class="dropdown-content menu rounded shadow-sm w-max p-1 px-3 text-lg bg-base-200">
-          <li>
-            <button class="px-5" onclick={openFileDialog}>ファイル選択</button>
-          </li>
-          <li>
-            <details>
-              <summary class="px-5">エンコーディング: {currentEncodingLabel}</summary>
-              <ul class="max-h-60 overflow-y-auto w-64">
-                {#each [...ENCODING_GROUPS.entries()] as [groupName, encodings]}
-                  <li class="menu-title">{groupName}</li>
-                  {#each encodings as encoding}
-                    <li>
-                      <button
-                        class="text-sm justify-start {selectedEncoding === encoding.value ? 'active' : ''}"
-                        onclick={() => selectedEncoding = encoding.value}
-                      >
-                        {encoding.label}
-                      </button>
-                    </li>
-                  {/each}
-                {/each}
-              </ul>
-            </details>
-          </li>
-        </ul>
+      <div class="text-sm">{progressText}</div>
+      <div class="flex items-center gap-2">
+        <label for="encoding-select" class="text-sm font-medium">エンコーディング:</label>
+        <select 
+          id="encoding-select"
+          class="select select-bordered select-sm w-48"
+          bind:value={selectedEncoding}
+        >
+          {#each [...ENCODING_GROUPS.entries()] as [groupName, encodings]}
+            <optgroup label={groupName}>
+              {#each encodings as encoding}
+                <option value={encoding.value}>
+                  {encoding.label}
+                </option>
+              {/each}
+            </optgroup>
+          {/each}
+        </select>
       </div>
     </div>
   </div>

@@ -5,6 +5,7 @@
   import { detectFileEncoding } from "$lib/encoding-detector";
   import { clamp, throttle } from "es-toolkit";
   import { ceil, floor, includes } from "es-toolkit/compat";
+  import { Menu } from "lucide-svelte";
   import rafSchd from "raf-schd";
   import { onDestroy, onMount, untrack } from "svelte";
 
@@ -337,9 +338,6 @@
     </div>
     {@render border()}
     <div class="flex items-center gap-3 p-2">
-      <button class="btn btn-sm btn-outline" onclick={openFileDialog}>
-        ファイル選択
-      </button>
       <div class="grow"></div>
       <div class="text-sm">{progressText}</div>
       <div class="flex items-center gap-2">
@@ -359,6 +357,17 @@
             </optgroup>
           {/each}
         </select>
+      </div>
+      <div class="dropdown dropdown-hover dropdown-top dropdown-end">
+        <div tabindex="0" role="button" class="p-1 px-2 hover:cursor-pointer border-l border-l-gray-500">
+          <Menu />
+        </div>
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        <ul tabindex="0" class="dropdown-content menu rounded shadow-sm w-max p-1 px-3 text-lg bg-base-200">
+          <li>
+            <button class="px-5" onclick={openFileDialog}>ファイル選択</button>
+          </li>
+        </ul>
       </div>
     </div>
   </div>

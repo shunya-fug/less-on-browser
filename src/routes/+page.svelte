@@ -59,48 +59,10 @@
     read(block);
   });
 
-  // エンコーディング変更時にファイルを再読込
-  $effect(() => {
-    if (file && worker && selectedEncoding) {
-      // 状態リセット
-      untrack(() => {
-        cache.clear();
-        inflight.clear();
-        pendingBlockStart = -1;
-        renderStart = 0;
-        lineCurrent = 0;
-        lineCount = 0;
-        visibleLines = [];
-        viewer?.scrollTo({ top: 0 });
-        scheduleScroll.cancel();
-      });
-
-      // インデックス再作成
-      worker.postMessage({
-        messageType: MessageTypeEnum.enum.CreateIndex,
-        file,
-        encoding: selectedEncoding,
-      } as ReaderWorkerMessageType.CreateIndex);
-    }
-  });
-
   $effect(() => {
     if (!file || !worker) {
       return;
     }
-
-    // ファイルのエンコーディングを自動検出
-    file.slice(0, 8192).arrayBuffer().then(buffer => {
-      const detection = detectFileEncoding(buffer);
-      console.log('自動検出されたエンコーディング:', detection);
-      
-      // 検出されたエンコーディングがサポートされている場合は設定
-      const supportedEncoding = SUPPORTED_ENCODINGS.find(e => e.value === detection.encoding);
-      if (supportedEncoding) {
-        selectedEncoding = detection.encoding;
-        console.log('エンコーディングを設定:', detection.encoding, '(信頼度:', detection.confidence, ', 方法:', detection.method, ')');
-      }
-    });
 
     // 状態リセット
     untrack(() => {
@@ -113,9 +75,27 @@
       visibleLines = [];
       viewer?.scrollTo({ top: 0 });
       scheduleScroll.cancel();
-      // セレクトボックスのフォーカスを外す
-      (document.activeElement as HTMLElement)?.blur();
+
+      // ファイルのエンコーディングを自動検出
+      file.slice(0, 8192).arrayBuffer().then(buffer => {
+        const detection = detectFileEncoding(buffer);
+        console.log('自動検出されたエンコーディング:', detection);
+        
+        // 検出されたエンコーディングがサポートされている場合は設定
+        const supportedEncoding = SUPPORTED_ENCODINGS.find(e => e.value === detection.encoding);
+        if (supportedEncoding) {
+          selectedEncoding = detection.encoding;
+          console.log('エンコーディングを設定:', detection.encoding, '(信頼度:', detection.confidence, ', 方法:', detection.method, ')');
+        }
+      });
     });
+
+    // インデックス再作成
+    worker.postMessage({
+      messageType: MessageTypeEnum.enum.CreateIndex,
+      file,
+      encoding: selectedEncoding,
+    } as ReaderWorkerMessageType.CreateIndex);
   });
 
   function initWorker() {
@@ -341,7 +321,6 @@
       <div class="grow"></div>
       <div class="text-sm">{progressText}</div>
       <div class="flex items-center gap-2">
-        <label for="encoding-select" class="text-sm font-medium">エンコーディング:</label>
         <select 
           id="encoding-select"
           class="select select-bordered select-sm w-48"

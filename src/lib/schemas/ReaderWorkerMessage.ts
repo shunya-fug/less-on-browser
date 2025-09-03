@@ -1,11 +1,12 @@
 import { z } from "zod";
+import { EncodingValueSchema } from "./encodings.js";
 
 export const MessageTypeEnum = z.enum(["CreateIndex", "CreateIndexStatus", "CreateIndexResult", "Read", "ReadResult"]);
 
 export const CreateIndex = z.object({
   messageType: z.literal(MessageTypeEnum.enum.CreateIndex),
   file: z.file(),
-  encoding: z.string().optional(),
+  encoding: EncodingValueSchema.optional(),
   chunkSize: z.number().min(1).optional(),
 });
 

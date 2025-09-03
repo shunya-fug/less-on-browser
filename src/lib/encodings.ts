@@ -1,5 +1,7 @@
+import { EncodingInfoSchema, type EncodingInfo } from './schemas/encodings.js';
+
 // TextDecoderがサポートするエンコーディング一覧
-export const SUPPORTED_ENCODINGS = [
+export const SUPPORTED_ENCODINGS: EncodingInfo[] = [
   // Unicode
   { value: 'utf-8', label: 'UTF-8', group: 'Unicode' },
   { value: 'utf-16le', label: 'UTF-16 Little Endian', group: 'Unicode' },
@@ -32,13 +34,13 @@ export const SUPPORTED_ENCODINGS = [
   { value: 'ascii', label: 'ASCII', group: 'その他' },
   { value: 'iso-8859-2', label: 'ISO-8859-2', group: 'その他' },
   { value: 'iso-8859-15', label: 'ISO-8859-15', group: 'その他' },
-] as const;
+].map(encoding => EncodingInfoSchema.parse(encoding));
 
 export const DEFAULT_ENCODING = 'utf-8';
 
 // エンコーディンググループをモジュールレベルでキャッシュ
-const createEncodingGroups = () => {
-  const groups = new Map<string, typeof SUPPORTED_ENCODINGS[number][]>();
+const createEncodingGroups = (): Map<string, EncodingInfo[]> => {
+  const groups = new Map<string, EncodingInfo[]>();
   
   for (const encoding of SUPPORTED_ENCODINGS) {
     const group = groups.get(encoding.group) || [];

@@ -1,10 +1,4 @@
-// エンコーディング自動検出機能
-
-export interface DetectionResult {
-  encoding: string;
-  confidence: number;
-  method: 'BOM' | 'statistical' | 'default';
-}
+import { DetectionResultSchema, EncodingValueSchema, type DetectionResult } from './schemas/encodings.js';
 
 /**
  * ファイルのBOM (Byte Order Mark) を検出してエンコーディングを判定
@@ -14,29 +8,29 @@ export function detectBOM(buffer: ArrayBuffer): DetectionResult | null {
   
   // UTF-8 BOM: EF BB BF
   if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
-    return {
+    return DetectionResultSchema.parse({
       encoding: 'utf-8',
       confidence: 1.0,
       method: 'BOM'
-    };
+    });
   }
   
   // UTF-16 Little Endian BOM: FF FE
   if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
-    return {
+    return DetectionResultSchema.parse({
       encoding: 'utf-16le',
       confidence: 1.0,
       method: 'BOM'
-    };
+    });
   }
   
   // UTF-16 Big Endian BOM: FE FF
   if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
-    return {
+    return DetectionResultSchema.parse({
       encoding: 'utf-16be',
       confidence: 1.0,
       method: 'BOM'
-    };
+    });
   }
   
   return null;
@@ -99,45 +93,45 @@ export function detectStatistical(buffer: ArrayBuffer): DetectionResult {
   
   // UTF-8判定
   if (validUtf8Ratio > 0.95) {
-    return {
+    return DetectionResultSchema.parse({
       encoding: 'utf-8',
       confidence: validUtf8Ratio,
       method: 'statistical'
-    };
+    });
   }
   
   // ASCII判定
   if (asciiRatio > 0.99) {
-    return {
+    return DetectionResultSchema.parse({
       encoding: 'ascii',
       confidence: asciiRatio,
       method: 'statistical'
-    };
+    });
   }
   
   // 日本語文字コードの簡易判定
   if (hasShiftJISPatterns(bytes)) {
-    return {
+    return DetectionResultSchema.parse({
       encoding: 'shift_jis',
       confidence: 0.7,
       method: 'statistical'
-    };
+    });
   }
   
   if (hasEucJpPatterns(bytes)) {
-    return {
+    return DetectionResultSchema.parse({
       encoding: 'euc-jp',
       confidence: 0.7,
       method: 'statistical'
-    };
+    });
   }
   
   // デフォルトはUTF-8
-  return {
+  return DetectionResultSchema.parse({
     encoding: 'utf-8',
     confidence: 0.5,
     method: 'default'
-  };
+  });
 }
 
 /**
@@ -192,6 +186,15 @@ function hasEucJpPatterns(bytes: Uint8Array): boolean {
  * ファイルのエンコーディングを自動検出
  */
 export function detectFileEncoding(buffer: ArrayBuffer): DetectionResult {
+  // ArrayBufferの検証
+  if (!buffer || buffer.byteLength === 0) {
+    return DetectionResultSchema.parse({
+      encoding: 'utf-8',
+      confidence: 0.5,
+      method: 'default'
+    });
+  }
+  
   // 1. BOM検出を優先
   const bomResult = detectBOM(buffer);
   if (bomResult) {

@@ -75,19 +75,20 @@
       visibleLines = [];
       viewer?.scrollTo({ top: 0 });
       scheduleScroll.cancel();
+      (document.activeElement as HTMLElement)?.blur();
 
       // ファイルのエンコーディングを自動検出
-      file.slice(0, 8192).arrayBuffer().then(buffer => {
-        const detection = detectFileEncoding(buffer);
-        console.log('自動検出されたエンコーディング:', detection);
-        
-        // 検出されたエンコーディングがサポートされている場合は設定
-        const supportedEncoding = SUPPORTED_ENCODINGS.find(e => e.value === detection.encoding);
-        if (supportedEncoding) {
-          selectedEncoding = detection.encoding;
-          console.log('エンコーディングを設定:', detection.encoding, '(信頼度:', detection.confidence, ', 方法:', detection.method, ')');
-        }
-      });
+      file
+        .slice(0, 8192)
+        .arrayBuffer()
+        .then((buffer) => {
+          const detection = detectFileEncoding(buffer);
+          // 検出されたエンコーディングがサポートされている場合は設定
+          const supportedEncoding = SUPPORTED_ENCODINGS.find((e) => e.value === detection.encoding);
+          if (supportedEncoding) {
+            selectedEncoding = detection.encoding;
+          }
+        });
     });
 
     // インデックス再作成
@@ -321,11 +322,7 @@
       <div class="grow"></div>
       <div class="text-sm">{progressText}</div>
       <div class="flex items-center gap-2">
-        <select 
-          id="encoding-select"
-          class="select select-bordered select-sm w-48"
-          bind:value={selectedEncoding}
-        >
+        <select id="encoding-select" class="select select-bordered select-sm w-48" bind:value={selectedEncoding}>
           {#each [...ENCODING_GROUPS.entries()] as [groupName, encodings]}
             <optgroup label={groupName}>
               {#each encodings as encoding}

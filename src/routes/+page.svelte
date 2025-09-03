@@ -1,6 +1,8 @@
 <script lang="ts">
   import { MessageTypeEnum } from "$lib/schemas/ReaderWorkerMessage";
   import * as ReaderWorkerMessageType from "$lib/types/ReaderWorkerMessage";
+  import { SUPPORTED_ENCODINGS, DEFAULT_ENCODING, ENCODING_GROUPS } from "$lib/encodings";
+  import { detectFileEncoding } from "$lib/encoding-detector";
   import { clamp, throttle } from "es-toolkit";
   import { ceil, floor, includes } from "es-toolkit/compat";
   import { Menu } from "lucide-svelte";
@@ -24,6 +26,7 @@
   let viewerClientHeight: number | null = $state(null);
   let lineHeight = $state(20);
   let isDragOver = $state(false);
+  let selectedEncoding = $state(DEFAULT_ENCODING);
   // 桁数に応じて行番号の幅を調整（ch 単位）
   let lineNumberWidthCh = $derived(Math.max(2, String(Math.max(1, lineCount)).length + 1));
 
@@ -72,15 +75,27 @@
       visibleLines = [];
       viewer?.scrollTo({ top: 0 });
       scheduleScroll.cancel();
-      // ドロップダウンメニューを閉じる
       (document.activeElement as HTMLElement)?.blur();
+
+      // ファイルのエンコーディングを自動検出
+      file
+        .slice(0, 8192)
+        .arrayBuffer()
+        .then((buffer) => {
+          const detection = detectFileEncoding(buffer);
+          // 検出されたエンコーディングがサポートされている場合は設定
+          const supportedEncoding = SUPPORTED_ENCODINGS.find((e) => e.value === detection.encoding);
+          if (supportedEncoding) {
+            selectedEncoding = detection.encoding;
+          }
+        });
     });
 
     // インデックス作成
     worker.postMessage({
       messageType: MessageTypeEnum.enum.CreateIndex,
       file,
-      encoding: "utf-16le",
+      encoding: selectedEncoding,
     } as ReaderWorkerMessageType.CreateIndex);
   });
 
@@ -303,9 +318,20 @@
       </div>
     </div>
     {@render border()}
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-3 p-2">
       <div class="grow"></div>
-      {progressText}
+      <div class="text-sm">{progressText}</div>
+      <select class="select select-bordered select-sm w-max" bind:value={selectedEncoding}>
+        {#each [...ENCODING_GROUPS.entries()] as [groupName, encodings]}
+          <optgroup label={groupName}>
+            {#each encodings as encoding}
+              <option value={encoding.value}>
+                {encoding.label}
+              </option>
+            {/each}
+          </optgroup>
+        {/each}
+      </select>
       <div class="dropdown dropdown-hover dropdown-top dropdown-end">
         <div tabindex="0" role="button" class="p-1 px-2 hover:cursor-pointer border-l border-l-gray-500">
           <Menu />

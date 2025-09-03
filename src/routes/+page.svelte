@@ -91,7 +91,7 @@
         });
     });
 
-    // インデックス再作成
+    // インデックス作成
     worker.postMessage({
       messageType: MessageTypeEnum.enum.CreateIndex,
       file,
@@ -321,19 +321,17 @@
     <div class="flex items-center gap-3 p-2">
       <div class="grow"></div>
       <div class="text-sm">{progressText}</div>
-      <div class="flex items-center gap-2">
-        <select id="encoding-select" class="select select-bordered select-sm w-48" bind:value={selectedEncoding}>
-          {#each [...ENCODING_GROUPS.entries()] as [groupName, encodings]}
-            <optgroup label={groupName}>
-              {#each encodings as encoding}
-                <option value={encoding.value}>
-                  {encoding.label}
-                </option>
-              {/each}
-            </optgroup>
-          {/each}
-        </select>
-      </div>
+      <select class="select select-bordered select-sm w-max" bind:value={selectedEncoding}>
+        {#each [...ENCODING_GROUPS.entries()] as [groupName, encodings]}
+          <optgroup label={groupName}>
+            {#each encodings as encoding}
+              <option value={encoding.value}>
+                {encoding.label}
+              </option>
+            {/each}
+          </optgroup>
+        {/each}
+      </select>
       <div class="dropdown dropdown-hover dropdown-top dropdown-end">
         <div tabindex="0" role="button" class="p-1 px-2 hover:cursor-pointer border-l border-l-gray-500">
           <Menu />

@@ -1,3 +1,4 @@
+import { EncodingValueSchema } from "$lib/schemas/encodings.js";
 import { MessageTypeEnum } from "$lib/schemas/ReaderWorkerMessage";
 import * as ReaderWorkerMessageType from "$lib/types/ReaderWorkerMessage";
 
@@ -88,7 +89,11 @@ self.onmessage = async (event: MessageEvent<ReaderWorkerMessageType.CreateIndex 
 };
 
 function getNewlinePattern(encoding: string): Uint8Array {
-  switch (encoding.toLowerCase()) {
+  // エンコーディング値をバリデート
+  const validatedEncoding = EncodingValueSchema.safeParse(encoding);
+  const encodingToUse = validatedEncoding.success ? validatedEncoding.data : "utf-8";
+
+  switch (encodingToUse.toLowerCase()) {
     case "utf-16le":
       return new Uint8Array([0x0a, 0x00]);
     case "utf-16be":

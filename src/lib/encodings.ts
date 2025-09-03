@@ -1,3 +1,4 @@
+import { groupBy } from 'es-toolkit';
 import { EncodingInfoSchema, type EncodingInfo } from './schemas/encodings.js';
 
 // TextDecoderがサポートするエンコーディング一覧
@@ -38,18 +39,7 @@ export const SUPPORTED_ENCODINGS: EncodingInfo[] = [
 
 export const DEFAULT_ENCODING = 'utf-8';
 
-// エンコーディンググループをモジュールレベルでキャッシュ
-const createEncodingGroups = (): Map<string, EncodingInfo[]> => {
-  const groups = new Map<string, EncodingInfo[]>();
-  
-  for (const encoding of SUPPORTED_ENCODINGS) {
-    const group = groups.get(encoding.group) || [];
-    group.push(encoding);
-    groups.set(encoding.group, group);
-  }
-  
-  return groups;
-};
-
-// キャッシュされたエンコーディンググループ
-export const ENCODING_GROUPS = createEncodingGroups();
+// キャッシュされたエンコーディンググループ（es-toolkitのgroupByを使用）
+export const ENCODING_GROUPS = new Map(
+  Object.entries(groupBy(SUPPORTED_ENCODINGS, (encoding) => encoding.group))
+);

@@ -302,7 +302,7 @@
               {#each visibleLines as line, i}
                 <div class="font-mono flex" style:height={`${lineHeight}px`} style:lineHeight={`${lineHeight}px`}>
                   <div
-                    class="select-none text-right pr-2 mr-3 border-r border-base-300 text-base-content/60"
+                    class="select-none text-right pr-2 mr-3 border-r border-base-300 text-base-content/60 shrink-0"
                     style:width={`${lineNumberWidthCh}ch`}
                   >
                     {renderStart + i + 1}

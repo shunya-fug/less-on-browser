@@ -25,4 +25,15 @@ describe("handle", () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("ok");
   });
+
+  test("dev=false でも /local 以外は通常処理される", async () => {
+    mock.module("$app/environment", () => ({ dev: false }));
+    const { handle } = await import("../src/hooks.server");
+    const event = { url: new URL("http://example.com/public") } as any;
+    const resolve = mock(() => Promise.resolve(new Response("ok")));
+    const response = await handle({ event, resolve });
+    expect(resolve).toHaveBeenCalledWith(event);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("ok");
+  });
 });

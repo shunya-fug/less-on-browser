@@ -258,7 +258,7 @@
     <div class="relative grow bg-base-100" ondrop={onDropFile} ondragover={onDragOver} ondragenter={onDragEnter}>
       <div
         class={[
-          "sticky inset-0 h-full p-5 z-10 transition-[opacity,visibility] duration-150 ease-in-out",
+          "sticky inset-0 h-full p-5 z-50 transition-[opacity,visibility] duration-150 ease-in-out",
           file && !isDragOver ? "opacity-0 invisible" : "opacity-70 visible",
         ]}
         ondragleave={onDragLeave}
@@ -296,18 +296,18 @@
         {#if file}
           <div style:height={`${Math.max(1, lineCount) * lineHeight}px`}>
             <div
-              class="absolute will-change-transform top-0 inset-x-0"
+              class="absolute will-change-transform top-0 left-0 w-max"
               style:transform={`translateY(${renderStart * lineHeight}px)`}
             >
               {#each visibleLines as line, i}
                 <div class="font-mono flex" style:height={`${lineHeight}px`} style:lineHeight={`${lineHeight}px`}>
                   <div
-                    class="select-none text-right pr-2 mr-3 border-r border-base-300 text-base-content/60 shrink-0"
+                    class="select-none text-right pr-2 mr-3 border-r border-base-300 text-base-content/60 shrink-0 sticky left-0 z-10 bg-base-100"
                     style:width={`${lineNumberWidthCh}ch`}
                   >
                     {renderStart + i + 1}
                   </div>
-                  <div class="overflow-hidden whitespace-pre grow">
+                  <div class="whitespace-pre grow">
                     {line}
                   </div>
                 </div>
